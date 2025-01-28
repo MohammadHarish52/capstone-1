@@ -5,4 +5,5 @@ import "hardhat/console.sol";
 
 contract Token {
    string public name = "My Token";
+   string public symbol = "TACH";
 }

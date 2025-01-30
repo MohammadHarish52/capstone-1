@@ -4,16 +4,14 @@ pragma solidity ^0.8.28;
 import "hardhat/console.sol";
 
 contract Token {
-    string public name = "My Token";
-    string public symbol = "TACH";
-    uint public decimals = 18;
-    uint public totalSupply = 1000000 * (10 ** decimals);
+    string public name;
+    string public symbol;
+    uint public decimals;
+    uint public totalSupply;
 
-    //Track balances
     mapping(address => uint) public balanceOf;
     mapping(address => mapping(address => uint)) public allowance;
 
-    // Defining an event
     event Transfer(address indexed from, address indexed to, uint value);
     event Approval(address indexed owner, address indexed spender, uint value);
 
@@ -29,24 +27,46 @@ contract Token {
         totalSupply = _totalSupply;
         balanceOf[msg.sender] = totalSupply;
     }
+
     function transfer(address _to, uint _value) public returns (bool success) {
         require(balanceOf[msg.sender] >= _value, "Insufficient balance");
-        // zero address check
         require(_to != address(0), "Invalid address");
+
         balanceOf[msg.sender] -= _value;
         balanceOf[_to] += _value;
-        // emitting an event
+
         emit Transfer(msg.sender, _to, _value);
         return true;
     }
+
     function approve(
         address _spender,
         uint _value
     ) public returns (bool success) {
-        // zero address check
         require(_spender != address(0), "Invalid address");
+
         allowance[msg.sender][_spender] = _value;
         emit Approval(msg.sender, _spender, _value);
+        return true;
+    }
+
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _value
+    ) public returns (bool success) {
+        require(balanceOf[_from] >= _value, "Insufficient balance");
+        require(
+            allowance[_from][msg.sender] >= _value,
+            "Insufficient allowance"
+        );
+        require(_to != address(0), "Invalid address");
+
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
+        allowance[_from][msg.sender] -= _value;
+
+        emit Transfer(_from, _to, _value);
         return true;
     }
 }

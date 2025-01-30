@@ -12,6 +12,7 @@ contract Token {
     //Track balances
     mapping(address => uint) public balanceOf;
     mapping(address => mapping(address => uint)) public allowance;
+
     // Defining an event
     event Transfer(address indexed from, address indexed to, uint value);
     event Approval(address indexed owner, address indexed spender, uint value);
@@ -42,6 +43,8 @@ contract Token {
         address _spender,
         uint _value
     ) public returns (bool success) {
+        // zero address check
+        require(_spender != address(0), "Invalid address");
         allowance[msg.sender][_spender] = _value;
         emit Approval(msg.sender, _spender, _value);
         return true;

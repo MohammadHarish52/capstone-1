@@ -99,7 +99,20 @@ describe("Token", () => {
           amount,
         );
       });
+      it("Emits an Approval event", async () => {
+        const event = result.logs[0];
+        expect(event.fragment.name).to.equal("Approval");
+        expect(event.args[0]).to.equal(owner.address);
+        expect(event.args[1]).to.equal(exchange.address);
+        expect(event.args[2]).to.equal(amount);
+      });
     });
-    describe("Failure", () => {});
+    describe("Failure", () => {
+      it("Rejects invalid spender address", async () => {
+        await expect(
+          token.connect(owner).approve(ethers.ZeroAddress, tokens(100)),
+        ).to.be.revertedWith("Invalid address");
+      });
+    });
   });
 });

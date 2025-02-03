@@ -27,15 +27,23 @@ contract Token {
         totalSupply = _totalSupply;
         balanceOf[msg.sender] = totalSupply;
     }
-
-    function transfer(address _to, uint _value) public returns (bool success) {
-        require(balanceOf[msg.sender] >= _value, "Insufficient balance");
+    function _transfer(
+        address _from,
+        address _to,
+        uint _value
+    ) internal returns (bool success) {
+        require(balanceOf[_from] >= _value, "Insufficient balance");
         require(_to != address(0), "Invalid address");
 
-        balanceOf[msg.sender] -= _value;
+        balanceOf[_from] -= _value;
         balanceOf[_to] += _value;
 
-        emit Transfer(msg.sender, _to, _value);
+        emit Transfer(_from, _to, _value);
+        return true;
+    }
+
+    function transfer(address _to, uint _value) public returns (bool success) {
+        _transfer(msg.sender, _to, _value);
         return true;
     }
 
@@ -55,18 +63,14 @@ contract Token {
         address _to,
         uint256 _value
     ) public returns (bool success) {
-        require(balanceOf[_from] >= _value, "Insufficient balance");
         require(
             allowance[_from][msg.sender] >= _value,
             "Insufficient allowance"
         );
-        require(_to != address(0), "Invalid address");
 
-        balanceOf[_from] -= _value;
-        balanceOf[_to] += _value;
+        // reset allowance
         allowance[_from][msg.sender] -= _value;
-
-        emit Transfer(_from, _to, _value);
+        _transfer(_from, _to, _value);
         return true;
     }
 }

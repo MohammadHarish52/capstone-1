@@ -2,83 +2,104 @@ const { ethers } = require("hardhat");
 const { expect } = require("chai");
 
 const tokens = (n) => {
-  // Helper function to convert number to token units
   return ethers.parseUnits(n.toString(), "ether");
 };
 
 describe("Token", () => {
   let token, owner, receiver, exchange;
-  const NAME = "Harish is amazing";
-  const SYMBOL = "HARISH";
-  const DECIMALS = 18;
-  const TOTAL_SUPPLY = tokens(1000000);
-
-  // Helper function to check transfer events
-  const checkTransferEvent = async (result, from, to, value) => {
-    const event = result.logs[0];
-    expect(event.fragment.name).to.equal("Transfer");
-    expect(event.args[0]).to.equal(from);
-    expect(event.args[1]).to.equal(to);
-    expect(event.args[2]).to.equal(value);
-  };
 
   beforeEach(async () => {
     const Token = await ethers.getContractFactory("Token");
     [owner, receiver, exchange] = await ethers.getSigners();
-    token = await Token.deploy(NAME, SYMBOL, DECIMALS, TOTAL_SUPPLY);
+    token = await Token.deploy(
+      "Harish is amazing",
+      "HARISH",
+      18,
+      tokens(1000000),
+    );
   });
 
   describe("Deployment", () => {
-    it("Check token details", async () => {
-      expect(await token.name()).to.equal(NAME);
-      expect(await token.symbol()).to.equal(SYMBOL);
-      expect(await token.decimals()).to.equal(DECIMALS);
-      expect(await token.totalSupply()).to.equal(TOTAL_SUPPLY);
-      expect(await token.balanceOf(owner.address)).to.equal(TOTAL_SUPPLY);
+    const name = "Harish is amazing";
+    const symbol = "HARISH";
+    const decimals = 18;
+    it("Check if name is correct", async () => {
+      expect(await token.name()).to.equal(name);
+    });
+
+    it("Check if symbol is correct", async () => {
+      expect(await token.symbol()).to.equal(symbol);
+    });
+    it("Check if decimals is correct", async () => {
+      expect(await token.decimals()).to.equal(decimals);
+    });
+    it("Check if total supply is correct", async () => {
+      const value = tokens(1000000);
+      expect(await token.totalSupply()).to.equal(value);
+    });
+    it("Assigning total supply to deployer", async () => {
+      expect(await token.balanceOf(owner.address)).to.equal(tokens(1000000));
     });
   });
 
-  describe("Token transfers and approvals", () => {
-    const amount = tokens(100);
+  describe("Sending tokens", () => {
+    let amount, transaction, result;
 
-    describe("Standard transfer", () => {
-      let result;
-
+    describe("Success", () => {
       beforeEach(async () => {
-        const transaction = await token
+        amount = tokens(100);
+        transaction = await token
           .connect(owner)
           .transfer(receiver.address, amount);
         result = await transaction.wait();
       });
 
-      it("Transfers token balances", async () => {
-        expect(await token.balanceOf(owner.address)).to.equal(
-          TOTAL_SUPPLY - amount,
-        );
-        expect(await token.balanceOf(receiver.address)).to.equal(amount);
-        await checkTransferEvent(
-          result,
-          owner.address,
-          receiver.address,
-          amount,
-        );
+      it("Transfer Token balance", async () => {
+        expect(await token.balanceOf(owner.address)).to.equal(tokens(999900));
+        expect(await token.balanceOf(receiver.address)).to.equal(tokens(100));
+      });
+
+      it("Emits a Transfer event", async () => {
+        const event = result.logs[0];
+        expect(event.fragment.name).to.equal("Transfer");
+        expect(event.args[0]).to.equal(owner.address);
+        expect(event.args[1]).to.equal(receiver.address);
+        expect(event.args[2]).to.equal(amount);
       });
     });
 
-    describe("Approving tokens", () => {
-      let result;
+    describe("Failure", () => {
+      it("Insufficient balance", async () => {
+        amount = tokens(100000000001);
+        await expect(
+          token.connect(owner).transfer(receiver.address, amount),
+        ).to.be.revertedWith("Insufficient balance");
+      });
 
+      it("Recipient cannot be zero address", async () => {
+        amount = tokens(100);
+        await expect(
+          token.connect(owner).transfer(ethers.ZeroAddress, amount),
+        ).to.be.revertedWith("Invalid address");
+      });
+    });
+  });
+  describe("Approving tokens", () => {
+    describe("Success", () => {
+      let amount, transaction, result;
       beforeEach(async () => {
-        const transaction = await token
+        amount = tokens(100);
+        transaction = await token
           .connect(owner)
           .approve(exchange.address, amount);
         result = await transaction.wait();
       });
-
-      it("Approves tokens for delegated transfer", async () => {
+      it("Allocates an allowance for delegated token spending tokens", async () => {
         expect(await token.allowance(owner.address, exchange.address)).to.equal(
           amount,
         );
+      });
+      it("Emits an Approval event", async () => {
         const event = result.logs[0];
         expect(event.fragment.name).to.equal("Approval");
         expect(event.args[0]).to.equal(owner.address);
@@ -86,81 +107,54 @@ describe("Token", () => {
         expect(event.args[2]).to.equal(amount);
       });
     });
-
-    describe("Delegated transfer", () => {
-      let result;
-
+    describe("Failure", () => {
+      it("Rejects invalid spender address", async () => {
+        await expect(
+          token.connect(owner).approve(ethers.ZeroAddress, tokens(100)),
+        ).to.be.revertedWith("Invalid address");
+      });
+    });
+  });
+  describe("Delegated token transfer", () => {
+    let amount, transaction, result;
+    beforeEach(async () => {
+      amount = tokens(100);
+      transaction = await token
+        .connect(owner)
+        .approve(exchange.address, amount);
+      result = await transaction.wait();
+    });
+    describe("Success", () => {
       beforeEach(async () => {
-        await token.connect(owner).approve(exchange.address, amount);
-        const transaction = await token
+        transaction = await token
           .connect(exchange)
           .transferFrom(owner.address, receiver.address, amount);
         result = await transaction.wait();
       });
-
-      it("Transfers tokens through delegation", async () => {
-        expect(await token.balanceOf(owner.address)).to.equal(
-          TOTAL_SUPPLY - amount,
-        );
-        expect(await token.balanceOf(receiver.address)).to.equal(amount);
+      it("Transfer token balance", async () => {
+        expect(await token.balanceOf(owner.address)).to.equal(tokens(999900));
+        expect(await token.balanceOf(receiver.address)).to.equal(tokens(100));
+      });
+      it("Resets the allowance", async () => {
         expect(await token.allowance(owner.address, exchange.address)).to.equal(
           0,
         );
-        await checkTransferEvent(
-          result,
-          owner.address,
-          receiver.address,
-          amount,
-        );
       });
     });
-
-    describe("Transfer failures", () => {
-      const amount = tokens(100);
-
-      describe("Invalid addresses", () => {
-        it("Rejects transfer to zero address", async () => {
-          await expect(
-            token.connect(owner).transfer(ethers.ZeroAddress, amount),
-          ).to.be.revertedWith("Invalid address");
-        });
-
-        it("Rejects approve to zero address", async () => {
-          await expect(
-            token.connect(owner).approve(ethers.ZeroAddress, amount),
-          ).to.be.revertedWith("Invalid address");
-        });
-
-        it("Rejects transferFrom to zero address", async () => {
-          // First approve exchange
-          await token.connect(owner).approve(exchange.address, amount);
-
-          await expect(
-            token
-              .connect(exchange)
-              .transferFrom(owner.address, ethers.ZeroAddress, amount),
-          ).to.be.revertedWith("Invalid address");
-        });
+    describe("Failure", () => {
+      it("Rejects insufficient allowance", async () => {
+        await expect(
+          token
+            .connect(exchange)
+            .transferFrom(owner.address, receiver.address, tokens(1001)),
+        ).to.be.revertedWith("Insufficient allowance");
       });
-
-      describe("Insufficient balances", () => {
-        const invalidAmount = tokens(100000000001);
-
-        it("Rejects transfer with insufficient balance", async () => {
-          await expect(
-            token.connect(owner).transfer(receiver.address, invalidAmount),
-          ).to.be.revertedWith("Insufficient balance");
-        });
-
-        it("Rejects transferFrom with insufficient balance", async () => {
-          await token.connect(owner).approve(exchange.address, invalidAmount);
-
-          await expect(
-            token
-              .connect(exchange)
-              .transferFrom(owner.address, receiver.address, invalidAmount),
-          ).to.be.revertedWith("Insufficient balance");
-        });
+      it("Rejects invalid recipient address", async () => {
+        await expect(
+          token
+            .connect(exchange)
+            .transferFrom(owner.address, ethers.ZeroAddress, tokens(100)),
+        ).to.be.revertedWith("Invalid address");
       });
     });
   });
